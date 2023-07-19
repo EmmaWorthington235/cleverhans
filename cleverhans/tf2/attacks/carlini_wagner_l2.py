@@ -3,7 +3,8 @@
 import numpy as np
 import tensorflow as tf
 from cleverhans.tf2.utils import get_or_guess_labels, set_with_mask
-
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.optimizers import legacy as legacy_optimizers
 
 def carlini_wagner_l2(model_fn, x, **kwargs):
     """
@@ -93,7 +94,8 @@ class CarliniWagnerL2(object):
         self.initial_const = initial_const
 
         # the optimizer
-        self.optimizer = tf.keras.optimizers.Adam(self.learning_rate)
+        # self.optimizer = tf.keras.optimizers.Adam(self.learning_rate)
+        self.optimizer = tf.keras.optimizers.legacy.Adam(self.learning_rate)
 
         super(CarliniWagnerL2, self).__init__()
 
@@ -320,8 +322,32 @@ def loss_fn(
     other = clip_tanh(x, clip_min=clip_min, clip_max=clip_max)
     l2_dist = l2(x_new, other)
 
+    '''
+    HYPERPARAMETERS
+    '''
+    a = 2 # width of the barrier
+    # STATIC
+    m = 1 # mass
+    hbar = 1 # reduced Plank's constant
+    V = 1 # potential barrier
+
+    '''
+    QUANTUM TUNELLING FUNCTIONS
+    '''
+    def k(E): # k1 function to relate wave values to the energy
+        return tf.math.sqrt(2*m*tf.math.abs(E-V)) / hbar**2
+
+    def T_square(E): # quantum tunneling with the square barrier
+        e_less_than_v = 1 / (1 + (tf.math.sinh(k(E)*a))**2 / (4*E*tf.math.abs(V-E)))
+        e_greater_than_v = 1 / (1 + (tf.math.sin(k(E)*a))**2 / (4*E*tf.math.abs(V-E)))
+        e_equal_v = 1 / (1 + a**2/2)
+
+        not_equal = tf.where(E < V, e_less_than_v, e_greater_than_v)
+        return tf.where(E == V, e_equal_v, not_equal)
+
     real = tf.reduce_sum(y_true * y_pred, 1)
-    other = tf.reduce_max((1.0 - y_true) * y_pred - y_true * 10_000, 1)
+    other = T_square(l2_dist)
+    # other = tf.reduce_max((1.0 - y_true) * y_pred - y_true * 10_000, 1)
 
     if targeted:
         # if targeted, optimize for making the other class most likely

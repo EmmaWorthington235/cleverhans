@@ -8,6 +8,7 @@ from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D
 
 from cleverhans.tf2.attacks.projected_gradient_descent import projected_gradient_descent
 from cleverhans.tf2.attacks.fast_gradient_method import fast_gradient_method
+from cleverhans.tf2.attacks.carlini_wagner_l2 import carlini_wagner_l2
 
 FLAGS = flags.FLAGS
 
@@ -62,6 +63,7 @@ def main(_):
     test_acc_clean = tf.metrics.SparseCategoricalAccuracy()
     test_acc_fgsm = tf.metrics.SparseCategoricalAccuracy()
     test_acc_pgd = tf.metrics.SparseCategoricalAccuracy()
+    test_acc_cw = tf.metrics.SparseCategoricalAccuracy()
 
     @tf.function
     def train_step(x, y):
@@ -97,6 +99,11 @@ def main(_):
         y_pred_pgd = model(x_pgd)
         test_acc_pgd(y, y_pred_pgd)
 
+        # x_cw = projected_gradient_descent(model, x, FLAGS.eps, 0.01, 40, np.inf)
+        x_cw = carlini_wagner_l2(model, x, targeted=False, max_iterations=10)
+        y_pred_cw = model(x_cw)
+        test_acc_cw(y, y_pred_cw)
+
         progress_bar_test.add(x.shape[0])
 
     print(
@@ -110,6 +117,12 @@ def main(_):
     print(
         "test acc on PGD adversarial examples (%): {:.3f}".format(
             test_acc_pgd.result() * 100
+        )
+    )
+
+    print(
+        "test acc on CW adversarial examples (%): {:.3f}".format(
+            test_acc_cw.result() * 100
         )
     )
 
