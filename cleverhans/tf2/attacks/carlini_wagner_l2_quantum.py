@@ -6,7 +6,7 @@ from cleverhans.tf2.utils import get_or_guess_labels, set_with_mask
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.optimizers import legacy as legacy_optimizers
 
-def carlini_wagner_l2(model_fn, x, **kwargs):
+def carlini_wagner_l2_quantum(model_fn, x, **kwargs):
     """
     This is the function interface for the Carlini-Wagner-L2 attack.
     For more details on the attack and the parameters see the corresponding class.
@@ -306,8 +306,27 @@ class CarliniWagnerL2(object):
 def l2(x, y):
     # technically squarred l2
     return tf.reduce_sum(tf.square(x - y), list(range(1, len(x.shape))))
+    
+'''
+QUANTUM TUNELLING FUNCTIONS
+'''
+def k(E): # k1 function to relate wave values to the energy
+    # STATIC
+    m = 1 # mass
+    hbar = 1 # reduced Plank's constant
+    V = 1 # potential barrier
+    return tf.math.sqrt(2*m*tf.math.abs(E-V)) / hbar**2
 
+def T_square(E): # quantum tunneling with the square barrier
+    a = 2 # width of the barrier
+    V = 1 # potential barrier
+    e_less_than_v = 1 / (1 + (tf.math.sinh(k(E)*a))**2 / (4*E*tf.math.abs(V-E)))
+    e_greater_than_v = 1 / (1 + (tf.math.sin(k(E)*a))**2 / (4*E*tf.math.abs(V-E)))
+    e_equal_v = 1 / (1 + a**2/2)
 
+    not_equal = tf.where(E < V, e_less_than_v, e_greater_than_v)
+    return tf.where(E == V, e_equal_v, not_equal)
+        
 def loss_fn(
     x,
     x_new,
@@ -323,7 +342,9 @@ def loss_fn(
     l2_dist = l2(x_new, other)
 
     real = tf.reduce_sum(y_true * y_pred, 1)
-    other = tf.reduce_max((1.0 - y_true) * y_pred - y_true * 10_000, 1)
+    
+    other = T_square(l2_dist) ## using the quantum tunneling function
+    # other = tf.reduce_max((1.0 - y_true) * y_pred - y_true * 10_000, 1)
 
     if targeted:
         # if targeted, optimize for making the other class most likely
