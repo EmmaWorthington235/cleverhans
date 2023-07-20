@@ -8,6 +8,9 @@ from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv2D
 
 from cleverhans.tf2.attacks.projected_gradient_descent import projected_gradient_descent
 from cleverhans.tf2.attacks.fast_gradient_method import fast_gradient_method
+from cleverhans.tf2.attacks.basic_iterative_method import basic_iterative_method
+from cleverhans.tf2.attacks.madry_et_al import madry_et_al
+from cleverhans.tf2.attacks.momentum_iterative_method import momentum_iterative_method
 from cleverhans.tf2.attacks.carlini_wagner_l2 import carlini_wagner_l2
 from cleverhans.tf2.attacks.carlini_wagner_l2_quantum import carlini_wagner_l2_quantum
 
@@ -64,6 +67,9 @@ def main(_):
     test_acc_clean = tf.metrics.SparseCategoricalAccuracy()
     test_acc_fgsm = tf.metrics.SparseCategoricalAccuracy()
     test_acc_pgd = tf.metrics.SparseCategoricalAccuracy()
+    test_acc_bim = tf.metrics.SparseCategoricalAccuracy()
+    test_acc_mea = tf.metrics.SparseCategoricalAccuracy()
+    test_acc_mim = tf.metrics.SparseCategoricalAccuracy()
     test_acc_cw = tf.metrics.SparseCategoricalAccuracy()
     test_acc_cw_quantum = tf.metrics.SparseCategoricalAccuracy()
 
@@ -101,6 +107,18 @@ def main(_):
         y_pred_pgd = model(x_pgd)
         test_acc_pgd(y, y_pred_pgd)
 
+        x_bim = basic_iterative_method(model, x, FLAGS.eps, eps_iter=0.01, nb_iter=40, norm=2)
+        y_pred_bim = model(x_bim)
+        test_acc_bim(y, y_pred_bim)
+
+        x_mea = madry_et_al(model, x, eps=0.01, eps_iter=0.01, nb_iter=40, norm=np.inf)
+        y_pred_mea = model(x_mea)
+        test_acc_mea(y, y_pred_mea)
+
+        x_mim = momentum_iterative_method(model, x, eps=0.01, eps_iter=0.01, nb_iter=40, norm=np.inf)
+        y_pred_mim = model(x_mim)
+        test_acc_mim(y, y_pred_mim)
+
         x_cw = carlini_wagner_l2(model, x, targeted=False, max_iterations=50)
         y_pred_cw = model(x_cw)
         test_acc_cw(y, y_pred_cw)
@@ -122,6 +140,24 @@ def main(_):
     print(
         "test acc on PGD adversarial examples (%): {:.3f}".format(
             test_acc_pgd.result() * 100
+        )
+    )
+
+    print(
+        "test acc on BIM adversarial examples (%): {:.3f}".format(
+            test_acc_bim.result() * 100
+        )
+    )
+
+    print(
+        "test acc on MEA adversarial examples (%): {:.3f}".format(
+            test_acc_mea.result() * 100
+        )
+    )
+
+    print(
+        "test acc on MIM adversarial examples (%): {:.3f}".format(
+            test_acc_mim.result() * 100
         )
     )
 
